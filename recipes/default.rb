@@ -39,6 +39,8 @@ template node['varnish']['default'] do
   notifies :restart, "service[varnish]"
 end
 
+directory "#{node['varnish']['storage_path']}/#{node['varnish']['instance']}"
+
 service "varnish" do
   supports :restart => true, :reload => true
   action [ :enable, :start ]
