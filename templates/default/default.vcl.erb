@@ -1,5 +1,51 @@
 backend default {
-        .host = "<%= node['varnish']['backend_host'] %>";
-        .port = "<%= node['varnish']['backend_port'] %>";
+  .host = "<%= node['varnish']['backend_host'] %>";
+  .port = "<%= node['varnish']['backend_port'] %>";
 }
 
+{
+  #include <sys/time.h>
+  #include <stdio.h>
+}C
+
+sub vcl_recv {
+
+  if (req.restarts == 0) {
+    C{
+      struct timeval detail_time;
+      gettimeofday(&detail_time,NULL);
+      char start[20];
+      sprintf(start, "t=%lu%06lu", detail_time.tv_sec, detail_time.tv_usec);
+      VRT_SetHdr(sp, HDR_REQ, "\020X-Request-Start:", start, vrt_magic_string_end);
+    }C
+
+    if (req.http.x-forwarded-for) {
+      set req.http.X-Forwarded-For = req.http.X-Forwarded-For ", " client.ip;
+    } else {
+      set req.http.X-Forwarded-For = client.ip;
+    }
+  }
+
+  if (req.request != "GET" &&
+      req.request != "HEAD" &&
+      req.request != "PUT" &&
+      req.request != "POST" &&
+      req.request != "TRACE" &&
+      req.request != "OPTIONS" &&
+      req.request != "DELETE") {
+      /* Non-RFC2616 or CONNECT which is weird. */
+      return (pipe);
+  }
+
+  if (req.request != "GET" && req.request != "HEAD") {
+    /* We only deal with GET and HEAD by default */
+    return (pass);
+  }
+
+  if (req.http.Authorization || req.http.Cookie) {
+    /* Not cacheable by default */
+    return (pass);
+  }
+
+  return (lookup);
+}
